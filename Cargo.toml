@@ -6,6 +6,8 @@ version = "0.0.1"
 authors = ["Ben Brittain <ben@brittain.org>"]
 edition = "2018"
 resolver = "2"
+description = "FFI bindings for the Apache nimBLE Project"
+license = "Apache-2.0"
 
 [dependencies]
 cty = "0.2.1"
