@@ -2,7 +2,7 @@ cargo-features = ["resolver"]
 
 [package]
 name = "apache-nimble-sys"
-version = "0.1.0"
+version = "0.0.1"
 authors = ["Ben Brittain <ben@brittain.org>"]
 edition = "2018"
 resolver = "2"
