@@ -4,6 +4,19 @@
 #![allow(non_snake_case)]
 
 mod interop {
+    #[no_mangle]
+    pub fn free(ptr: *mut cty::c_void) {}
+
+    #[no_mangle]
+    pub fn malloc(amt: cty::size_t) -> *mut cty::c_void {
+        core::ptr::null_mut()
+    }
+
+    #[no_mangle]
+    pub fn __assert_func(file: *const char, line: usize, func: *const char, expr: *const char) {
+        panic!("Assertion failed!");
+    }
+
     use cstr_core::CStr;
 
     #[no_mangle]

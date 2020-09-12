@@ -7,6 +7,7 @@ extern crate cc;
 
 fn main() {
     cc::Build::new()
+        // host stack
         .file("mynewt-nimble/nimble/host/src/ble_att.c")
         .file("mynewt-nimble/nimble/host/src/ble_hs_misc.c")
         .file("mynewt-nimble/nimble/host/src/ble_att_clt.c")
@@ -53,6 +54,19 @@ fn main() {
         // gap service
         .file("mynewt-nimble/nimble/host/services/gap/src/ble_svc_gap.c")
         .include("mynewt-nimble/nimble/host/services/gap/include")
+        // porting layer
+        .file("mynewt-nimble/porting/npl/dummy/src/hci_dummy.c")
+        .file("mynewt-nimble/porting/nimble/src/nimble_port.c")
+        .file("mynewt-nimble/porting/nimble/src/endian.c")
+        .file("mynewt-nimble/porting/nimble/src/os_mbuf.c")
+        .file("mynewt-nimble/porting/nimble/src/os_mempool.c")
+        .file("mynewt-nimble/porting/nimble/src/os_msys_init.c")
+        .file("mynewt-nimble/porting/nimble/src/mem.c")
+        // tinycrypt
+        .file("mynewt-nimble/ext/tinycrypt/src/aes_encrypt.c")
+        .file("mynewt-nimble/ext/tinycrypt/src/utils.c")
+        .file("mynewt-nimble/ext/tinycrypt/src/ccm_mode.c")
+
         // TODO more services
         .include("mynewt-nimble/nimble/host/include") // ble host
         .include("mynewt-nimble/porting/npl/dummy/include") // semaphore.h
