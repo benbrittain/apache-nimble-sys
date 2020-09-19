@@ -66,7 +66,6 @@ fn main() {
         .file("mynewt-nimble/ext/tinycrypt/src/aes_encrypt.c")
         .file("mynewt-nimble/ext/tinycrypt/src/utils.c")
         .file("mynewt-nimble/ext/tinycrypt/src/ccm_mode.c")
-
         // TODO more services
         .include("mynewt-nimble/nimble/host/include") // ble host
         .include("mynewt-nimble/porting/npl/dummy/include") // semaphore.h
@@ -99,5 +98,4 @@ fn main() {
     bindings
         .write_to_file(out_path.join("bindings.rs"))
         .expect("Couldn't write bindings!");
-
 }

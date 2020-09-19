@@ -14,7 +14,11 @@ mod interop {
 
     #[no_mangle]
     pub fn __assert_func(file: *const char, line: usize, func: *const char, expr: *const char) {
-        panic!("Assertion failed!");
+        unsafe {
+            let str_file = CStr::from_ptr(file as *const _).to_str().unwrap();
+            let str_func = CStr::from_ptr(func as *const _).to_str().unwrap();
+            panic!("Assertion in {} - {}:{}", str_func, str_file, line);
+        }
     }
 
     use cstr_core::CStr;
