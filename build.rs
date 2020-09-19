@@ -91,7 +91,47 @@ fn main() {
         .clang_arg("-Imynewt-nimble/ext/tinycrypt/include") // tinycrypt
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
         // These types need to be defined by the wrapping OS
+        // Mutex
         .blacklist_type("ble_npl_mutex")
+        .blacklist_function("ble_npl_mutex_init")
+        .blacklist_function("ble_npl_mutex_pend")
+        .blacklist_function("ble_npl_mutex_release")
+        // Semaphore
+        .blacklist_type("ble_npl_sem")
+        .blacklist_function("ble_npl_sem_init")
+        .blacklist_function("ble_npl_sem_pend")
+        .blacklist_function("ble_npl_sem_release")
+        .blacklist_function("ble_npl_sem_get_count")
+        // Events
+        .blacklist_type("ble_npl_event")
+        .blacklist_type("ble_npl_event_fn")
+        .blacklist_function("ble_npl_event_init")
+        .blacklist_function("ble_npl_event_is_queued")
+        .blacklist_function("ble_npl_event_get_arg")
+        .blacklist_function("ble_npl_event_set_arg")
+        .blacklist_function("ble_npl_event_run")
+        // Event Queue
+        .blacklist_type("ble_npl_eventq")
+        .blacklist_function("ble_npl_eventq_init")
+        .blacklist_function("ble_npl_eventq_get")
+        .blacklist_function("ble_npl_eventq_put")
+        .blacklist_function("ble_npl_eventq_remove")
+        .blacklist_function("ble_npl_eventq_is_empty")
+        // Callout
+        .blacklist_type("ble_npl_callout")
+        .blacklist_function("ble_npl_callout_init")
+        .blacklist_function("ble_npl_callout_reset")
+        .blacklist_function("ble_npl_callout_stop")
+        .blacklist_function("ble_npl_callout_is_active")
+        .blacklist_function("ble_npl_callout_get_ticks")
+        .blacklist_function("ble_npl_callout_set_arg")
+        .blacklist_function("ble_npl_callout_remaining_ticks")
+        // dftl queue
+        .blacklist_function("nimble_port_get_dflt_eventq")
+        // Don't generate anything that needs the port layer types
+        .blacklist_type("os_mqueue")
+        .blacklist_function("os_mqueue.*")
+        .blacklist_function("ble_hs_evq_set")
         // generate
         .generate()
         .expect("Unable to generate bindings");
