@@ -11,12 +11,18 @@ extern "C" fn ble_npl_os_started() -> bool {
 
 // Task
 
+pub type ble_npl_event_fn = ::core::option::Option<unsafe extern "C" fn(ev: *mut ble_npl_event)>;
+
 #[no_mangle]
 extern "C" fn ble_npl_get_current_task_id(evq: *mut ble_npl_eventq) -> *mut () {
     core::ptr::null_mut()
 }
 
 // Event Queue
+
+#[repr(C)]
+#[no_mangle]
+pub struct ble_npl_eventq {}
 
 #[no_mangle]
 extern "C" fn ble_npl_eventq_init(evq: *mut ble_npl_eventq) {}
@@ -36,6 +42,10 @@ extern "C" fn ble_npl_eventq_put(evq: *mut ble_npl_eventq, ev: *mut ble_npl_even
 extern "C" fn ble_npl_eventq_remove(evq: *mut ble_npl_eventq, ev: *mut ble_npl_event) {}
 
 // Events
+
+#[repr(C)]
+#[no_mangle]
+pub struct ble_npl_event {}
 
 #[no_mangle]
 extern "C" fn ble_npl_event_run(ev: *mut ble_npl_event) {}
@@ -59,6 +69,10 @@ extern "C" fn ble_npl_event_set_arg(ev: *mut ble_npl_event, arg: *mut ()) {}
 
 // Mutexes
 
+#[repr(C)]
+#[no_mangle]
+pub struct ble_npl_mutex {}
+
 #[no_mangle]
 extern "C" fn ble_npl_mutex_init(mu: *mut ble_npl_mutex) -> ble_npl_error_t {
     ble_npl_error_BLE_NPL_ENOENT
@@ -78,6 +92,10 @@ extern "C" fn ble_npl_mutex_release(mu: *mut ble_npl_mutex) -> ble_npl_error_t {
 }
 
 // Semaphores
+
+#[repr(C)]
+#[no_mangle]
+pub struct ble_npl_sem {}
 
 #[no_mangle]
 extern "C" fn ble_npl_sem_init(sem: *mut ble_npl_sem, tokens: u16) -> ble_npl_error_t {
@@ -100,6 +118,10 @@ extern "C" fn ble_npl_sem_get_count(sem: *mut ble_npl_sem) -> u16 {
 }
 
 // Callouts
+
+#[repr(C)]
+#[no_mangle]
+pub struct ble_npl_callout {}
 
 #[no_mangle]
 extern "C" fn ble_npl_callout_init(
