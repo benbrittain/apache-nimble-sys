@@ -3,13 +3,29 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 
+extern crate alloc;
+
 mod interop {
-    #[no_mangle]
-    pub fn free(ptr: *mut cty::c_void) {}
+    use alloc::alloc::{alloc_zeroed, dealloc, realloc as alloc_realloc, Layout};
 
     #[no_mangle]
-    pub fn malloc(amt: cty::size_t) -> *mut cty::c_void {
-        core::ptr::null_mut()
+    pub unsafe fn free(ptr: *mut u8) {
+        let layout = Layout::new::<u16>();
+        dealloc(ptr, layout);
+    }
+
+    #[no_mangle]
+    pub unsafe fn realloc(ptr: *mut u8, size: usize) -> *mut u8 {
+        let layout = Layout::from_size_align(size, 16).unwrap();
+        let new_ptr = alloc_realloc(ptr, layout, size);
+        new_ptr
+    }
+
+    #[no_mangle]
+    pub unsafe fn malloc(amt: usize) -> *mut u8 {
+        let layout = Layout::from_size_align(amt, 16).unwrap();
+        let ptr = alloc_zeroed(layout);
+        ptr
     }
 
     #[no_mangle]
