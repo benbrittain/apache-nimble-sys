@@ -54,6 +54,9 @@ fn main() {
         // gap service
         .file("mynewt-nimble/nimble/host/services/gap/src/ble_svc_gap.c")
         .include("mynewt-nimble/nimble/host/services/gap/include")
+        // gatt service
+        .file("mynewt-nimble/nimble/host/services/gatt/src/ble_svc_gatt.c")
+        .include("mynewt-nimble/nimble/host/services/gatt/include")
         // porting layer
         .file("mynewt-nimble/porting/npl/dummy/src/hci_dummy.c")
         .file("mynewt-nimble/porting/nimble/src/nimble_port.c")
@@ -90,6 +93,10 @@ fn main() {
         .clang_arg("-Imynewt-nimble/porting/npl/linux/include") // console.h
         .clang_arg("-Imynewt-nimble/ext/tinycrypt/include") // tinycrypt
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
+        .derive_debug(false)
+        .layout_tests(false)
+        .derive_copy(false)
+        .derive_default(false)
         // These types need to be defined by the wrapping OS
         // Mutex
         .blacklist_type("ble_npl_mutex")
