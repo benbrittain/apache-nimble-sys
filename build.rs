@@ -6,9 +6,25 @@ use std::path::PathBuf;
 extern crate cc;
 
 fn main() {
+    let port_layer = env::var("NIMBLE_PORT").expect("You must define NIMBLE_PORT. \
+    It is a path to the crate containing the types needed by nimBLE. Ex: bl_npl_callout");
+
+    let target_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let mut npl = target_dir.clone();
+    npl.push("nimble");
+    std::fs::create_dir_all(npl.clone()).unwrap();
+    npl.push("nimble_npl_os.h");
+    cbindgen::generate_with_config(
+        port_layer.clone(),
+        cbindgen::Config::from_file("cbindgen.toml").unwrap(),
+    )
+    .expect("Unable to generate bindings")
+    .write_to_file(npl.into_os_string());
+
     cc::Build::new()
         // host stack
         .file("mynewt-nimble/nimble/host/src/ble_att.c")
+        .file("mynewt-nimble/nimble/host/src/ble_hs.c")
         .file("mynewt-nimble/nimble/host/src/ble_hs_misc.c")
         .file("mynewt-nimble/nimble/host/src/ble_att_clt.c")
         .file("mynewt-nimble/nimble/host/src/ble_hs_mqueue.c")
@@ -24,13 +40,11 @@ fn main() {
         .file("mynewt-nimble/nimble/host/src/ble_hs_stop.c")
         .file("mynewt-nimble/nimble/host/src/ble_gatts.c")
         .file("mynewt-nimble/nimble/host/src/ble_ibeacon.c")
-        .file("mynewt-nimble/nimble/host/src/ble_gatts_lcl.c")
         .file("mynewt-nimble/nimble/host/src/ble_l2cap.c")
         .file("mynewt-nimble/nimble/host/src/ble_hs_adv.c")
         .file("mynewt-nimble/nimble/host/src/ble_l2cap_coc.c")
         .file("mynewt-nimble/nimble/host/src/ble_hs_atomic.c")
         .file("mynewt-nimble/nimble/host/src/ble_l2cap_sig.c")
-        .file("mynewt-nimble/nimble/host/src/ble_hs.c")
         .file("mynewt-nimble/nimble/host/src/ble_l2cap_sig_cmd.c")
         .file("mynewt-nimble/nimble/host/src/ble_hs_cfg.c")
         .file("mynewt-nimble/nimble/host/src/ble_monitor.c")
@@ -71,11 +85,10 @@ fn main() {
         .file("mynewt-nimble/ext/tinycrypt/src/ccm_mode.c")
         // TODO more services
         .include("mynewt-nimble/nimble/host/include") // ble host
-        .include("mynewt-nimble/porting/npl/dummy/include") // semaphore.h
+        .include("mynewt-nimble/porting/nimble/include") // nimble_npl.h
         .include("mynewt-nimble/nimble/include") // nimble_npl.h
-        .include("mynewt-nimble/porting/nimble/include") // os/os_mbuf.h
-        .include("mynewt-nimble/porting/npl/linux/include") // console.h
         .include("mynewt-nimble/ext/tinycrypt/include") // tinycrypt
+        .include(target_dir) // Generated types from cbindgen
         .warnings(false)
         .compile("nimble-host");
 
@@ -90,7 +103,7 @@ fn main() {
         .clang_arg("-Imynewt-nimble/porting/npl/dummy/include") // semaphore.h
         .clang_arg("-Imynewt-nimble/nimble/include") // nimble_npl.h
         .clang_arg("-Imynewt-nimble/porting/nimble/include") // os/os_mbuf.h
-        .clang_arg("-Imynewt-nimble/porting/npl/linux/include") // console.h
+        //       .clang_arg("-Imynewt-nimble/porting/npl/linux/include") // console.h
         .clang_arg("-Imynewt-nimble/ext/tinycrypt/include") // tinycrypt
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
         .derive_debug(false)

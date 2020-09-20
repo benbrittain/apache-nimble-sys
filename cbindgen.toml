@@ -1,0 +1,13 @@
+language = "C"
+
+style = "both"
+include_guard = "_NIMBLE_NPL_OS_H"
+header = """#define BLE_NPL_OS_ALIGNMENT    4
+#define BLE_NPL_TIME_FOREVER    UINT32_MAX
+typedef uint32_t ble_npl_time_t;
+typedef int32_t ble_npl_stime_t;"""
+
+[export]
+item_types = ["constants", "globals", "enums", "structs", "unions", "typedefs", "opaque"]
+
+
