@@ -1,0 +1,46 @@
+[package]
+name = "apache-nimble-sys"
+version = "0.0.1"
+authors = ["Ben Brittain <ben@brittain.org>"]
+edition = "2021"
+description = "FFI bindings for the Apache nimBLE Project"
+license = "Apache-2.0"
+
+[dependencies]
+cty = "0.2.1"
+defmt = "0.3"
+critical-section = "1.0"
+heapless = "0.7.0"
+
+# Dependencies for the nrf5x driver
+nrf52840-pac  = { version = "0.12.0", features = ["rt"], optional = true }
+
+# Dependencies for the embassy port layer
+embassy-sync = { version = "0.5.0", optional = true }
+embassy-futures = { version = "0.1.0", optional = true }
+embassy-time = { version = "0.3.0", optional = true }
+embassy-time-driver = { version = "0.1.0", optional = true }
+
+[patch.crates-io]
+embassy-sync = { git = "https://github.com/embassy-rs/embassy", branch = "main" }
+embassy-futures = { git = "https://github.com/embassy-rs/embassy", branch = "main" }
+embassy-time = { git = "https://github.com/embassy-rs/embassy", branch = "main" }
+embassy-time-driver = { git = "https://github.com/embassy-rs/embassy", branch = "main" }
+
+[build-dependencies]
+cc = "1.0"
+bindgen = "0.69.0"
+cbindgen = "0.26.0"
+
+[features]
+critical-section = ["critical-section/restore-state-bool"]
+
+# drivers
+nrf52840 = ["dep:nrf52840-pac"]
+
+# port layers
+port-layer-embassy = ["dep:embassy-sync", "dep:embassy-futures", "dep:embassy-time", "dep:embassy-time-driver"]
+
+# components
+host = []
+controller = []

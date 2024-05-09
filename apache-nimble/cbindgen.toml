@@ -10,4 +10,8 @@ typedef int32_t ble_npl_stime_t;"""
 [export]
 item_types = ["constants", "globals", "enums", "structs", "unions", "typedefs", "opaque"]
 
+[defines]
+# Add new port layers here. In build.rs, we add a -D flag based on the enabled feature flag
+"feature = port-layer-embassy" = "DEFINE_EMBASSY"
+
 
