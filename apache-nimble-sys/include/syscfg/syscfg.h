@@ -158,13 +158,13 @@
 #endif
 
 #ifndef MYNEWT_VAL_MCU_HFCLK_SOURCE__HFINT
-#define MYNEWT_VAL_MCU_HFCLK_SOURCE__HFINT (1) // NOTE: changed to 1
+#define MYNEWT_VAL_MCU_HFCLK_SOURCE__HFINT (0)
 #endif
 #ifndef MYNEWT_VAL_MCU_HFCLK_SOURCE__HFXO
-#define MYNEWT_VAL_MCU_HFCLK_SOURCE__HFXO (0) // NOTE: changed to 0
+#define MYNEWT_VAL_MCU_HFCLK_SOURCE__HFXO (0) // NOTE: changed to 0, we don't want to make assumptions about which clock source is being used
 #endif
 #ifndef MYNEWT_VAL_MCU_HFCLK_SOURCE
-#define MYNEWT_VAL_MCU_HFCLK_SOURCE (1)
+#define MYNEWT_VAL_MCU_HFCLK_SOURCE (0) // NOTE: changed to 0, we don't want to make assumptions about which clock source is being used
 #endif
 
 #ifndef MYNEWT_VAL_MCU_I2C_RECOVERY_DELAY_USEC
@@ -184,10 +184,10 @@
 #define MYNEWT_VAL_MCU_LFCLK_SOURCE__LFSYNTH (0)
 #endif
 #ifndef MYNEWT_VAL_MCU_LFCLK_SOURCE__LFXO
-#define MYNEWT_VAL_MCU_LFCLK_SOURCE__LFXO (1)
+#define MYNEWT_VAL_MCU_LFCLK_SOURCE__LFXO (0) // NOTE: changed to 0, we don't want to make assumptions about which clock source is being used
 #endif
 #ifndef MYNEWT_VAL_MCU_LFCLK_SOURCE
-#define MYNEWT_VAL_MCU_LFCLK_SOURCE (1)
+#define MYNEWT_VAL_MCU_LFCLK_SOURCE (0) // NOTE: changed to 0, we don't want to make assumptions about which clock source is being used
 #endif
 
 #ifndef MYNEWT_VAL_MCU_NRF52832
