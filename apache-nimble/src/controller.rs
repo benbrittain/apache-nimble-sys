@@ -3,11 +3,11 @@ use core::mem::size_of;
 use core::sync::atomic::{AtomicBool, Ordering};
 
 use bt_hci::cmd::controller_baseband::HostBufferSize;
-use bt_hci::cmd::{AsyncCmd, Cmd, SyncCmd};
-use bt_hci::controller::{CmdError, ControllerCmdAsync, ControllerCmdSync};
+use bt_hci::cmd::{AsyncCmd, Cmd, Error, SyncCmd};
+use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
 use bt_hci::data::{AclPacket, AclPacketHeader};
 use bt_hci::event::{CommandComplete, Event, EventPacketHeader};
-use bt_hci::param::Error;
+use bt_hci::param::Error as HciError;
 use bt_hci::{ControllerToHostPacket, FromHciBytes, PacketKind, ReadHci, WriteHci};
 use defmt::{error, trace, Debug2Format};
 use embassy_futures::{join, yield_now};
@@ -190,15 +190,12 @@ impl NimbleController {
     ///
     /// To wait for a response, we use [`CMD_SIGNAL`]. This only works with the assumption that the
     /// nimble controller can only handle one command at a time.
-    async fn execute_command<C: Cmd + Debug>(
-        &self,
-        cmd: &C,
-    ) -> Result<Event<'_>, CmdError<OsError>> {
+    async fn execute_command<C: Cmd + Debug>(&self, cmd: &C) -> Result<Event<'_>, Error<OsError>> {
         // allocate space for cmd
         let _lock = self.cmd_lock.lock().await;
         let ptr = unsafe { raw::ble_transport_alloc_cmd() };
         if core::ptr::eq(ptr, core::ptr::null_mut()) {
-            return Err(CmdError::Io(OsError::NoMem));
+            return Err(Error::Io(OsError::NoMem));
         }
         trace!("sending cmd: {}", Debug2Format(cmd));
 
@@ -207,7 +204,7 @@ impl NimbleController {
         if let Err(e) = cmd.write_hci(cmd_data) {
             error!("failed to convert cmd into raw bytes: {}", Debug2Format(&e));
             unsafe { raw::ble_transport_free(ptr) };
-            return Err(CmdError::Io(OsError::NoMem));
+            return Err(Error::Io(OsError::NoMem));
         }
         self.transform(cmd, unsafe {
             core::slice::from_raw_parts_mut(ptr as *mut u8, cmd.size())
@@ -218,7 +215,7 @@ impl NimbleController {
         if ret != 0 {
             error!("failed to queue command, dropping command");
             unsafe { raw::ble_transport_free(ptr) };
-            return Err(CmdError::Io(OsError::Invalid));
+            return Err(Error::Io(OsError::Invalid));
         }
 
         // wait until we receive a status or command complete
@@ -235,7 +232,7 @@ impl NimbleController {
                     "unexpected error when parsing event header: {}",
                     Debug2Format(&e),
                 );
-                return Err(CmdError::Hci(Error::INVALID_HCI_PARAMETERS));
+                return Err(Error::Hci(HciError::INVALID_HCI_PARAMETERS));
             }
         };
         let buf =
@@ -255,7 +252,7 @@ impl NimbleController {
                     Debug2Format(&e),
                     buf
                 );
-                CmdError::Hci(Error::INVALID_HCI_PARAMETERS)
+                Error::Hci(HciError::INVALID_HCI_PARAMETERS)
             })
     }
 }
@@ -266,9 +263,11 @@ impl Default for NimbleController {
     }
 }
 
-impl bt_hci::controller::Controller for NimbleController {
+impl embedded_io::ErrorType for NimbleController {
     type Error = OsError;
+}
 
+impl bt_hci::controller::Controller for NimbleController {
     async fn write_acl_data(
         &self,
         packet: &bt_hci::data::AclPacket<'_>,
@@ -383,7 +382,7 @@ where
     async fn exec(
         &self,
         cmd: &C,
-    ) -> Result<<C as SyncCmd>::Return, bt_hci::controller::CmdError<Self::Error>> {
+    ) -> Result<<C as SyncCmd>::Return, bt_hci::cmd::Error<Self::Error>> {
         let response = self.execute_command(cmd).await?;
 
         match response {
@@ -404,7 +403,7 @@ where
                                 Debug2Format(&cmd),
                                 Debug2Format(&e)
                             );
-                            CmdError::Hci(e)
+                            Error::Hci(e)
                         })
                 } else {
                     error!(
@@ -412,7 +411,7 @@ where
                         Debug2Format(&cmd),
                         Debug2Format(&c)
                     );
-                    Err(CmdError::Io(OsError::InvalidParameter))
+                    Err(Error::Io(OsError::InvalidParameter))
                 }
             }
             r => {
@@ -421,14 +420,14 @@ where
                     Debug2Format(&cmd),
                     Debug2Format(&r)
                 );
-                Err(CmdError::Io(OsError::InvalidParameter))
+                Err(Error::Io(OsError::InvalidParameter))
             }
         }
     }
 }
 
 impl<C: AsyncCmd + Debug> ControllerCmdAsync<C> for NimbleController {
-    async fn exec(&self, cmd: &C) -> Result<(), CmdError<Self::Error>> {
+    async fn exec(&self, cmd: &C) -> Result<(), bt_hci::cmd::Error<Self::Error>> {
         let response = self.execute_command(cmd).await?;
 
         match response {
@@ -446,7 +445,7 @@ impl<C: AsyncCmd + Debug> ControllerCmdAsync<C> for NimbleController {
                         Debug2Format(&cmd),
                         Debug2Format(&c)
                     );
-                    Err(CmdError::Io(OsError::InvalidParameter))
+                    Err(Error::Io(OsError::InvalidParameter))
                 }
             }
             r => {
@@ -455,7 +454,7 @@ impl<C: AsyncCmd + Debug> ControllerCmdAsync<C> for NimbleController {
                     Debug2Format(&cmd),
                     Debug2Format(&r),
                 );
-                Err(CmdError::Io(OsError::InvalidParameter))
+                Err(Error::Io(OsError::InvalidParameter))
             }
         }
     }
