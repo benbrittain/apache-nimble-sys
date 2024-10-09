@@ -1,6 +1,6 @@
 [submodule "mynewt-nimble"]
 	path = mynewt-nimble
-	url = git@github.com:apache/mynewt-nimble.git
+	url = https://github.com/apache/mynewt-nimble
 [submodule "nrfx"]
 	path = nrfx
 	url = https://github.com/NordicSemiconductor/nrfx
