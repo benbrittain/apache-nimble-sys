@@ -840,7 +840,7 @@
 #endif
 
 #ifndef MYNEWT_VAL_BLE_EXT_ADV
-#define MYNEWT_VAL_BLE_EXT_ADV (0)
+#define MYNEWT_VAL_BLE_EXT_ADV (1) // NOTE: changed to 1 from 0
 #endif
 
 #ifndef MYNEWT_VAL_BLE_EXT_ADV_MAX_SIZE
@@ -1044,7 +1044,7 @@
 
 /* Value copied from BLE_EXT_ADV */
 #ifndef MYNEWT_VAL_BLE_LL_CFG_FEAT_LL_EXT_ADV
-#define MYNEWT_VAL_BLE_LL_CFG_FEAT_LL_EXT_ADV (0)
+#define MYNEWT_VAL_BLE_LL_CFG_FEAT_LL_EXT_ADV (1) // NOTE: changed to 1 from 0
 #endif
 
 /* Value copied from BLE_PERIODIC_ADV */
