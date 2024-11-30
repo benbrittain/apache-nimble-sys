@@ -15,7 +15,7 @@ pub mod controller;
 pub mod host;
 
 extern "C" {
-    pub fn ble_ll_init();
+    pub(crate) fn ble_ll_init();
     fn os_msys_init();
     fn os_mempool_module_init();
 }

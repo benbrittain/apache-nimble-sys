@@ -51,6 +51,7 @@ static mut EQ_POOL: [EventQueueState; 8] = [EQ; 8];
 #[no_mangle]
 pub struct ble_npl_eventq {
     ch: &'static EventQueueState,
+    len: u8,
 }
 
 #[no_mangle]
@@ -62,7 +63,8 @@ pub unsafe extern "C" fn ble_npl_eventq_init(evq: *mut ble_npl_eventq) {
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
             .is_ok()
     }) {
-        (*evq).ch = q
+        (*evq).ch = q;
+        (*evq).len = 0;
     } else {
         panic!("no more event queues")
     };
@@ -98,6 +100,7 @@ pub async unsafe fn ble_npl_eventq_get(
 
     if !ev.is_null() {
         (*ev).queued = false;
+        (*evq).len -= 1;
     }
 
     ev
@@ -108,6 +111,7 @@ pub unsafe extern "C" fn ble_npl_eventq_put(evq: *mut ble_npl_eventq, ev: *mut b
     // trace!("eventq put: evq {} ev {}", evq, ev);
 
     (*ev).queued = true;
+    (*evq).len += 1;
     if let Err(e) = (*evq).ch.q.try_send(ev) {
         panic!("event queue error: {:?}", e)
     };
@@ -121,11 +125,12 @@ pub unsafe extern "C" fn ble_npl_eventq_remove(evq: *mut ble_npl_eventq, ev: *mu
     // the channel, so we just remove everything and put them back, except for the item we want to
     // remove.
     driver::cs_internal::with_fn(|| {
-        for _ in 0..(*evq).ch.q.len() {
+        for _ in 0..(*evq).len {
             let pulled = (*evq).ch.q.try_receive().unwrap();
 
             if core::ptr::eq(pulled, ev) {
                 (*ev).queued = false;
+                (*evq).len -= 1;
                 continue;
             }
 

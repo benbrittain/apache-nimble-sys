@@ -10,11 +10,10 @@ use bt_hci::event::{CommandComplete, Event, EventPacketHeader};
 use bt_hci::param::Error as HciError;
 use bt_hci::{ControllerToHostPacket, FromHciBytes, PacketKind, ReadHci, WriteHci};
 use defmt::{error, trace, Debug2Format};
-use embassy_futures::{join, yield_now};
+use embassy_futures::join;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::mutex::Mutex;
-use embassy_sync::signal::Signal;
 
 use crate::{raw, ready_to_send, OsError, OsMbuf};
 
@@ -45,49 +44,51 @@ extern "C" fn ble_transport_to_hs_evt_impl(buf: *mut cty::c_void) -> cty::c_int 
         }
     }
 
-    READ_CHANNEL.try_send(PacketKind::Event).map_or_else(
-        |_| {
-            error!("event to host being overwritten. this should not happen.");
-            OsError::NoMem as i32
-        },
-        |_| unsafe {
-            READ_BUFFER.copy_from_slice(&data);
-            0
-        },
-    )
+    READ_CHANNEL
+        .try_send((PacketKind::Event, data))
+        .map_or_else(
+            |_| {
+                error!("event to host being overwritten. this should not happen.");
+                OsError::NoMem as i32
+            },
+            |_| 0,
+        )
 }
 
 #[cfg(not(feature = "host"))]
 #[no_mangle]
 extern "C" fn ble_transport_to_hs_acl_impl(om: *mut raw::os_mbuf) -> cty::c_int {
-    READ_CHANNEL.try_send(PacketKind::AclData).map_or_else(
-        |_| {
-            error!("acl to host being overwritten. this should not happen.");
-            OsError::NoMem as i32
-        },
-        |_| unsafe {
-            READ_BUFFER.fill(0);
-            let parse_result =
-                AclPacketHeader::read_hci::<OsMbuf>(om.into(), READ_BUFFER.as_mut_slice())
-                    .map_err(|_| OsError::Invalid)
-                    .and_then(|hdr| {
-                        let buf = &mut READ_BUFFER[hdr.size()..(hdr.size() + hdr.data_len())];
-                        <OsMbuf as embedded_io::Read>::read_exact(&mut om.into(), buf)
-                            .map_err(|_| OsError::Invalid)?;
-                        AclPacket::from_header_hci_bytes(hdr, buf).map_err(|_| OsError::Invalid)
-                    });
+    let mut data = [0; HCI_PKT_BUF_SIZE];
 
-            if let Err(e) = parse_result {
-                error!(
-                    "could not fully parse ACL packet to send to host. dropping packet: {}",
-                    Debug2Format(&e)
-                );
-                return OsError::NoMem as i32;
-            };
-            raw::os_mbuf_free_chain(om);
-            0
-        },
-    )
+    let parse_result = AclPacketHeader::read_hci::<OsMbuf>(om.into(), data.as_mut_slice())
+        .map_err(|_| OsError::Invalid)
+        .and_then(|hdr| {
+            let data = &mut data[hdr.size()..(hdr.size() + hdr.data_len())];
+            <OsMbuf as embedded_io::Read>::read_exact(&mut om.into(), data)
+                .map_err(|_| OsError::Invalid)?;
+            AclPacket::from_header_hci_bytes(hdr, data).map_err(|_| OsError::Invalid)
+        });
+
+    if let Err(e) = parse_result {
+        error!(
+            "could not fully parse ACL packet to send to host. dropping packet: {}",
+            Debug2Format(&e)
+        );
+        return OsError::NoMem as i32;
+    };
+
+    READ_CHANNEL
+        .try_send((PacketKind::AclData, data))
+        .map_or_else(
+            |_| {
+                error!("acl to host being overwritten. this should not happen.");
+                OsError::NoMem as i32
+            },
+            |_| unsafe {
+                raw::os_mbuf_free_chain(om);
+                0
+            },
+        )
 }
 
 // This isn't used in the controller
@@ -122,12 +123,10 @@ async unsafe fn ble_ll_task() -> ! {
         // we want to wait until the read channel is empty and all command responses have been
         // processed before we run an event, otherwise we risk overwriting data that hasn't
         // been received by the host yet.
-        join::join(ready_to_send(&READ_CHANNEL).await, async {
-            while let Some(()) = CMD_SIGNAL.try_take() {
-                CMD_SIGNAL.signal(());
-                yield_now().await;
-            }
-        })
+        join::join(
+            ready_to_send(&READ_CHANNEL).await,
+            ready_to_send(&CMD_SIGNAL).await,
+        )
         .await;
 
         raw::ble_npl_event_run(ev);
@@ -155,9 +154,9 @@ const HCI_PKT_BUF_SIZE: usize = raw::BLE_ACL_MAX_PKT_SIZE as usize
     + size_of::<raw::os_mbuf>();
 
 static NIMBLE_CONTROLLER_IN_USE: AtomicBool = AtomicBool::new(false);
-static mut READ_BUFFER: [u8; HCI_PKT_BUF_SIZE] = [0; HCI_PKT_BUF_SIZE];
-static READ_CHANNEL: Channel<CriticalSectionRawMutex, PacketKind, 1> = Channel::new();
-static CMD_SIGNAL: Signal<CriticalSectionRawMutex, ()> = Signal::new();
+static READ_CHANNEL: Channel<CriticalSectionRawMutex, (PacketKind, [u8; HCI_PKT_BUF_SIZE]), 1> =
+    Channel::new();
+static CMD_SIGNAL: Channel<CriticalSectionRawMutex, [u8; HCI_PKT_BUF_SIZE], 1> = Channel::new();
 
 impl NimbleController {
     pub fn new() -> Self {
@@ -190,7 +189,11 @@ impl NimbleController {
     ///
     /// To wait for a response, we use [`CMD_SIGNAL`]. This only works with the assumption that the
     /// nimble controller can only handle one command at a time.
-    async fn execute_command<C: Cmd + Debug>(&self, cmd: &C) -> Result<Event<'_>, Error<OsError>> {
+    async fn execute_command<'a, C: Cmd + Debug>(
+        &self,
+        buf: &'a mut [u8; HCI_PKT_BUF_SIZE],
+        cmd: &C,
+    ) -> Result<Event<'a>, Error<OsError>> {
         // allocate space for cmd
         let _lock = self.cmd_lock.lock().await;
         let ptr = unsafe { raw::ble_transport_alloc_cmd() };
@@ -219,13 +222,14 @@ impl NimbleController {
         }
 
         // wait until we receive a status or command complete
-        CMD_SIGNAL.wait().await;
+        let cmd_result = CMD_SIGNAL.receive().await;
+        buf.copy_from_slice(&cmd_result);
 
         // free the buffer to let other commands run
         unsafe { raw::ble_transport_free(ptr) };
 
         // parse the response data
-        let hdr = match EventPacketHeader::from_hci_bytes(unsafe { READ_BUFFER.as_slice() }) {
+        let hdr = match EventPacketHeader::from_hci_bytes(buf) {
             Ok((hdr, _)) => hdr,
             Err(e) => {
                 error!(
@@ -235,8 +239,7 @@ impl NimbleController {
                 return Err(Error::Hci(HciError::INVALID_HCI_PARAMETERS));
             }
         };
-        let buf =
-            unsafe { &READ_BUFFER[..(size_of::<EventPacketHeader>() + hdr.params_len as usize)] };
+        let buf = &buf[..(size_of::<EventPacketHeader>() + hdr.params_len as usize)];
         Event::from_hci_bytes(buf)
             .map(|p| {
                 trace!("response data: cmd {} response bytes {}", 
@@ -349,17 +352,12 @@ impl bt_hci::controller::Controller for NimbleController {
         loop {
             // This should be safe because references to buf aren't being carried across loop iterations
             let buf = unsafe { core::slice::from_raw_parts_mut(buf.as_mut_ptr(), len) };
-            let kind = READ_CHANNEL.receive().await;
-            // Access to mutable static buffer should be safe since it's guarded by a channel with a
-            // capacity of 1. The buffer data must be consumed here before any new writes can happen to
-            // the buffer.
-            unsafe {
-                buf.copy_from_slice(&READ_BUFFER[..len]);
-            }
+            let (kind, data) = READ_CHANNEL.receive().await;
+            buf.copy_from_slice(&data[..len]);
             match ControllerToHostPacket::from_hci_bytes_with_kind(kind, buf) {
                 Ok((ControllerToHostPacket::Event(Event::CommandComplete(_)), _))
                 | Ok((ControllerToHostPacket::Event(Event::CommandStatus(_)), _)) => {
-                    CMD_SIGNAL.signal(());
+                    CMD_SIGNAL.send(data).await;
                     continue;
                 }
                 Ok(value) => {
@@ -383,7 +381,8 @@ where
         &self,
         cmd: &C,
     ) -> Result<<C as SyncCmd>::Return, bt_hci::cmd::Error<Self::Error>> {
-        let response = self.execute_command(cmd).await?;
+        let mut buf = [0; HCI_PKT_BUF_SIZE];
+        let response = self.execute_command(&mut buf, cmd).await?;
 
         match response {
             Event::CommandComplete(c) => {
@@ -428,7 +427,8 @@ where
 
 impl<C: AsyncCmd + Debug> ControllerCmdAsync<C> for NimbleController {
     async fn exec(&self, cmd: &C) -> Result<(), bt_hci::cmd::Error<Self::Error>> {
-        let response = self.execute_command(cmd).await?;
+        let mut buf = [0; HCI_PKT_BUF_SIZE];
+        let response = self.execute_command(&mut buf, cmd).await?;
 
         match response {
             Event::CommandStatus(c) => {

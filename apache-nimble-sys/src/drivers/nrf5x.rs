@@ -1,4 +1,4 @@
-use nrf52840_pac as pac;
+use embassy_nrf::pac;
 
 use defmt::{error, trace};
 use pac::interrupt;
@@ -109,7 +109,8 @@ mod cs_impl {
     use core::arch::asm;
     use core::sync::atomic::{compiler_fence, AtomicBool, Ordering};
 
-    use super::pac::{Interrupt, NVIC};
+    use super::pac::Interrupt;
+    use cortex_m::peripheral::NVIC;
 
     const RESERVED_IRQS: u32 = (1 << (Interrupt::RADIO as u8))
         | (1 << (Interrupt::RTC0 as u8))
