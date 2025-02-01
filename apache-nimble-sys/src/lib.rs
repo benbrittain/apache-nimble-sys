@@ -8,12 +8,6 @@
 #[cfg(not(any(feature = "port-layer-embassy")))]
 compile_error!("Please choose a port layer to use.");
 
-#[repr(C)]
-pub(crate) enum COption<T> {
-    Some(T),
-    None,
-}
-
 #[cfg_attr(feature = "nrf52840", path = "drivers/nrf5x.rs")]
 mod driver;
 

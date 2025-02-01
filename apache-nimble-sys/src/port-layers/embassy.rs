@@ -1,4 +1,5 @@
 use core::sync::atomic::{AtomicBool, Ordering};
+use core::task::{RawWaker, RawWakerVTable, Waker};
 
 use critical_section::{acquire, release, RestoreState};
 use defmt::{error, trace};
@@ -8,10 +9,9 @@ use embassy_sync::blocking_mutex::CriticalSectionMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::waitqueue::AtomicWaker;
 use embassy_time::Timer;
-use embassy_time_driver::{allocate_alarm, now, set_alarm, set_alarm_callback, AlarmHandle};
+use embassy_time_driver::{now, schedule_wake};
 
 use crate::driver;
-use crate::COption;
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
@@ -170,7 +170,6 @@ pub unsafe extern "C" fn ble_npl_event_init(
     arg: *mut (),
 ) {
     trace!("event init: {}", ev);
-    // TODO: investigate why this sometimes get called with a null `ev`
     ev.write_bytes(0, 1);
     (*ev).queued = false;
     (*ev).arg_ptr = arg;
@@ -261,14 +260,15 @@ pub extern "C" fn ble_npl_sem_get_count(sem: *mut ble_npl_sem) -> u16 {
 
 // Callouts
 
+static VTABLE: RawWakerVTable = RawWakerVTable::new(clone_waker, callout_cb, callout_cb, |_| {});
+
 #[repr(C)]
 #[no_mangle]
 pub struct ble_npl_callout {
-    alarm_handle: COption<u8>,
     active: bool,
     expires_at: u32,
     event_queue: *mut ble_npl_eventq,
-    event: *mut ble_npl_event,
+    event: ble_npl_event,
 }
 
 #[no_mangle]
@@ -286,13 +286,9 @@ pub unsafe extern "C" fn ble_npl_callout_init(
     //     ev_arg
     // );
     c.write_bytes(0, 1);
-    if let Some(handle) = allocate_alarm() {
-        (*c).alarm_handle = COption::Some(handle.id());
-        (*c).active = false;
-        set_alarm_callback(handle, callout_cb, c as _);
-        (*c).event_queue = evq;
-        ble_npl_event_init((*c).event, ev_cb, ev_arg);
-    };
+    (*c).active = false;
+    (*c).event_queue = evq;
+    ble_npl_event_init(&mut (*c).event as _, ev_cb, ev_arg);
 }
 
 #[no_mangle]
@@ -301,25 +297,19 @@ pub unsafe extern "C" fn ble_npl_callout_reset(
     ticks: ble_npl_time_t,
 ) -> ble_npl_error_t {
     // trace!("callout reset: {}", c);
-    if let COption::Some(handle) = (*c).alarm_handle {
-        (*c).expires_at = now() as u32 + ticks;
-        set_alarm(AlarmHandle::new(handle), (*c).expires_at as u64);
-        (*c).active = true;
-    } else {
-        error!("nimble attempted to reset an uninitialized callout")
-    }
+    (*c).expires_at = now() as u32 + ticks;
+    schedule_wake(
+        (*c).expires_at as u64,
+        &Waker::from_raw(RawWaker::new(c as _, &VTABLE)),
+    );
+    (*c).active = true;
     ble_npl_error_BLE_NPL_ENOENT
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn ble_npl_callout_stop(co: *mut ble_npl_callout) {
     // trace!("callout stop: {}", co);
-    if let COption::Some(handle) = (*co).alarm_handle {
-        assert!(!set_alarm(AlarmHandle::new(handle), 0));
-        (*co).active = false;
-    } else {
-        error!("nimble attempted to stop an uninitialized callout")
-    }
+    (*co).active = false;
 }
 
 #[no_mangle]
@@ -342,11 +332,17 @@ pub unsafe extern "C" fn ble_npl_callout_remaining_ticks(
     (time - (*co).expires_at)
 }
 
-fn callout_cb(ctx: *mut ()) {
+fn clone_waker(data: *const ()) -> RawWaker {
+    RawWaker::new(data, &VTABLE)
+}
+
+fn callout_cb(ctx: *const ()) {
     unsafe {
         let co: *mut ble_npl_callout = ctx as *mut ble_npl_callout;
+        if ((*co).active) {
+            ble_npl_eventq_put((*co).event_queue, &mut (*co).event as _)
+        }
         (*co).active = false;
-        ble_npl_eventq_put((*co).event_queue, (*co).event)
     }
 }
 
