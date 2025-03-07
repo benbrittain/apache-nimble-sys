@@ -1,4 +1,4 @@
-use embassy_nrf::pac;
+use nrf_pac as pac;
 
 use defmt::{error, trace};
 use pac::interrupt;
